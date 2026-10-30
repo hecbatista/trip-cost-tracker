@@ -26,6 +26,8 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 
   color-scheme: light;
 }
@@ -60,7 +62,11 @@ button { cursor: pointer; }
 .app {
   max-width: 560px;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 14px) 16px calc(var(--safe-bottom) + 120px);
+  padding:
+    calc(var(--safe-top) + 14px)
+    max(16px, var(--safe-right))
+    calc(var(--safe-bottom) + 120px)
+    max(16px, var(--safe-left));
 }
 
 /* ───────── Header / graffiti title ───────── */
@@ -155,7 +161,7 @@ button { cursor: pointer; }
 
 .fab {
   position: fixed; z-index: 20;
-  right: max(18px, calc(50% - 280px + 18px));
+  right: max(18px, calc(var(--safe-right) + 8px), calc(50% - 280px + 18px));
   bottom: calc(var(--safe-bottom) + 20px);
   width: 70px; height: 70px;
   display: grid; place-items: center;
@@ -165,6 +171,10 @@ button { cursor: pointer; }
   border: var(--border); border-radius: 50%;
   box-shadow: var(--pop);
   animation: wiggle 4s ease-in-out infinite;
+}
+/* Wide screens (big or unfolded phones, landscape): park the + beside the column. */
+@media (min-width: 760px) {
+  .fab { right: calc(50% - 280px - 96px); }
 }
 .fab:active { transform: translate(4px, 4px); box-shadow: none; animation: none; }
 
@@ -303,7 +313,7 @@ button.stat:active { transform: translate(3px, 3px); box-shadow: none; }
   max-width: 560px; margin: 0 auto;
   max-height: calc(100dvh - var(--safe-top) - 20px);
   overflow-y: auto;
-  padding: 10px 18px calc(var(--safe-bottom) + 22px);
+  padding: 10px max(18px, var(--safe-right)) calc(var(--safe-bottom) + 22px) max(18px, var(--safe-left));
   background: var(--cream);
   border: var(--border); border-bottom: 0;
   border-radius: 28px 28px 0 0;
