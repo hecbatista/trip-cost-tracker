@@ -81,6 +81,11 @@
   ];
   const ITEM_EMOJIS = ['💸', '🚕', '✈️', '🏨', '☕', '🥪', '🍣', '🥟', '🍕', '🌮', '🍹', '🍦', '🛒', '💊', '🎨', '🏖️', '🛍️', '🎟️', '💝'];
 
+  const CREW = ['crew/crew-1.webp', 'crew/crew-2.webp', 'crew/crew-3.webp', 'crew/crew-4.webp'];
+  const CHEERS = ['¡Dale! 💃', 'Wepa! ✨', 'Added! 🌴', 'On the tab 🧾', 'Miami mode 😎', 'Treat yo self 💅'];
+  const KIND_CHEERS = ['So generous 💝', 'Big heart energy 💖', 'Crew loves you 🥹'];
+  const BURST = ['💖', '🌴', '✨', '🦩', '☀️', '💸'];
+
   const guessEmoji = (name) => (EMOJI_RULES.find(([re]) => re.test(name)) || [, '💸'])[1];
 
   /* ───────── State ───────── */
@@ -138,6 +143,41 @@
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1900);
+  }
+
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+  // One of the crew slides up from the bottom with a speech bubble.
+  const crewPop = document.getElementById('crew-pop');
+  let crewTimer, lastCrew = -1;
+  function crewSay(msg) {
+    let i;
+    do { i = Math.floor(Math.random() * CREW.length); } while (i === lastCrew && CREW.length > 1);
+    lastCrew = i;
+    crewPop.querySelector('img').src = CREW[i];
+    crewPop.querySelector('.bubble').textContent = msg;
+    crewPop.classList.remove('show');
+    void crewPop.offsetWidth; // restart the slide-in if it's already showing
+    crewPop.classList.add('show');
+    clearTimeout(crewTimer);
+    crewTimer = setTimeout(() => crewPop.classList.remove('show'), 2300);
+  }
+
+  function boing(el) {
+    el.classList.remove('boing');
+    void el.offsetWidth;
+    el.classList.add('boing');
+    for (let n = 0; n < 7; n++) {
+      const s = document.createElement('span');
+      s.className = 'burst';
+      s.textContent = pick(BURST);
+      const angle = (Math.PI * (n + .5)) / 7;
+      s.style.setProperty('--dx', `${Math.cos(angle) * -70}px`);
+      s.style.setProperty('--dy', `${-40 - Math.sin(angle) * 70}px`);
+      s.style.setProperty('--rot', `${(Math.random() - .5) * 90}deg`);
+      el.appendChild(s);
+      setTimeout(() => s.remove(), 950);
+    }
   }
 
   const isStandalone = () =>
@@ -242,6 +282,11 @@
           <div class="budget-row"><span>${Math.round((t.mine / state.prediction) * 100)}% of prediction</span><span>Out of pocket ${money(t.pocket)}</span></div>
           <div class="bar"><div class="bar-fill ${barClass}" style="width:${pct}%"></div></div>
         </div>` : ''}
+
+      <div class="section-title">💖 The crew</div>
+      <div class="card crew">
+        ${CREW.map((src, i) => `<button class="crew-member" data-crew="${i}" aria-label="Boop crew member ${i + 1}"><img src="${src}" alt="" draggable="false"></button>`).join('')}
+      </div>
 
       <div class="section-title">🧾 Spending</div>
       <div class="card">
@@ -408,7 +453,9 @@
         if (isNew) state.items.push(draft);
         else state.items[state.items.findIndex((i) => i.id === draft.id)] = draft;
         save(); closeSheet(); render();
-        toast(isNew ? 'Added! 🌴' : 'Saved ✨');
+        if (!isNew) toast('Saved ✨');
+        else if (totals().left < 0 && state.prediction) crewSay('Uh oh… over budget 🚨');
+        else crewSay(pick(kindnessOf(draft) ? KIND_CHEERS : CHEERS));
       });
 
       root.querySelector('[data-act="cancel"]').addEventListener('click', closeSheet);
@@ -488,8 +535,9 @@
   /* ───────── Events ───────── */
 
   app.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-act],[data-edit]');
+    const el = e.target.closest('[data-act],[data-edit],[data-crew]');
     if (!el) return;
+    if (el.dataset.crew) return boing(el);
     if (el.dataset.edit) return itemSheet(state.items.find((i) => i.id === el.dataset.edit));
 
     switch (el.dataset.act) {

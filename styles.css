@@ -418,6 +418,77 @@ button.stat:active { transform: translate(3px, 3px); box-shadow: none; }
 
 .footer-note { margin: 30px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 
+/* ───────── The crew (sticker photos) ───────── */
+.crew {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  padding: 16px 10px 12px;
+  background:
+    radial-gradient(var(--pink-soft) 2.5px, transparent 3px) 0 0 / 18px 18px,
+    var(--paper);
+  overflow: visible;
+}
+.crew-member {
+  position: relative;
+  padding: 0; background: none; border: 0;
+}
+.crew-member img {
+  display: block; width: 100%; height: auto;
+  transform-origin: 50% 90%;
+  animation: bob 3.2s ease-in-out infinite;
+}
+.crew-member:nth-child(1) img { --r: -7deg; animation-delay: 0s; }
+.crew-member:nth-child(2) img { --r: 5deg; animation-delay: -.8s; }
+.crew-member:nth-child(3) img { --r: -4deg; animation-delay: -1.6s; }
+.crew-member:nth-child(4) img { --r: 8deg; animation-delay: -2.4s; }
+.crew-member.boing img { animation: boing .75s cubic-bezier(.3, 1.5, .5, 1); }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(var(--r)); }
+  50% { transform: translateY(-7px) rotate(calc(var(--r) * -.6)); }
+}
+@keyframes boing {
+  0% { transform: rotate(var(--r)); }
+  18% { transform: scale(1.18, .8) rotate(var(--r)); }
+  50% { transform: translateY(-34px) scale(.92, 1.12) rotate(calc(var(--r) * -2)); }
+  78% { transform: translateY(0) scale(1.08, .94) rotate(var(--r)); }
+  100% { transform: rotate(var(--r)); }
+}
+
+/* emoji confetti from a tapped sticker */
+.burst {
+  position: absolute; left: 50%; top: 35%; z-index: 5;
+  font-size: 22px; pointer-events: none;
+  animation: burst .9s ease-out forwards;
+}
+@keyframes burst {
+  from { transform: translate(-50%, 0) scale(.4); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(1.2) rotate(var(--rot)); opacity: 0; }
+}
+
+/* the cheering pop-up */
+.crew-pop {
+  position: fixed; z-index: 30;
+  left: max(10px, var(--safe-left));
+  bottom: calc(var(--safe-bottom) - 26px);
+  width: 130px;
+  pointer-events: none;
+  transform: translateY(115%) rotate(-12deg);
+  transition: transform .5s cubic-bezier(.3, 1.5, .5, 1);
+}
+.crew-pop.show { transform: translateY(0) rotate(-4deg); }
+.crew-pop img { display: block; width: 100%; height: auto; }
+.crew-pop .bubble {
+  position: absolute; left: 112px; top: 6px;
+  padding: 8px 14px;
+  font-family: var(--font-display); font-size: 15px; white-space: nowrap;
+  background: var(--yellow);
+  border: var(--border); border-radius: 18px 18px 18px 4px;
+  box-shadow: var(--pop-sm);
+  transform: rotate(4deg) scale(0); transform-origin: 0 100%;
+  transition: transform .3s .25s cubic-bezier(.3, 1.6, .5, 1);
+}
+.crew-pop.show .bubble { transform: rotate(4deg) scale(1); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

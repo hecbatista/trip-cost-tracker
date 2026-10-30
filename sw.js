@@ -1,9 +1,10 @@
 // Bump VERSION whenever you change app files so phones pick up the update.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `trip-shell-${VERSION}`;
 const FONTS = 'trip-fonts';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
+  'crew/crew-1.webp', 'crew/crew-2.webp', 'crew/crew-3.webp', 'crew/crew-4.webp',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 
