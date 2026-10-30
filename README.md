@@ -21,6 +21,10 @@ Open **https://hecbatista.github.io/trip-cost-tracker/** in **Safari** on your i
 
 It opens full-screen like a normal app.
 
+Friends can use the same link. Each phone starts empty and keeps its own costs, so nobody
+sees anyone else's. Tap **Load the example list** on an empty screen to load the original
+Miami notes.
+
 ## Developing
 
 It's plain HTML/CSS/JS with no build step:

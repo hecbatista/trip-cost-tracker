@@ -87,7 +87,8 @@
 
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-  function seedState() {
+  // The original notes-app list, loadable from the empty screen.
+  function exampleState() {
     const rows = [
       ['Uber to Airport', 3095, 2, '🚕'],
       ['Walgreens', 836, 1, '💊'],
@@ -117,7 +118,7 @@
       const trip = old && Array.isArray(old.trips) && (old.trips.find((t) => /miami/i.test(t.name)) || old.trips[0]);
       if (trip) return { prediction: trip.prediction || 0, items: trip.items || [] };
     } catch { /* fall through */ }
-    return seedState();
+    return { prediction: 0, items: [] };
   }
 
   let state = load();
@@ -244,7 +245,8 @@
 
       <div class="section-title">🧾 Spending</div>
       <div class="card">
-        ${items ? `<ul class="list">${items}</ul>` : `<div class="empty"><span class="big">🌴</span>Nothing yet. Tap + to add your first cost!</div>`}
+        ${items ? `<ul class="list">${items}</ul>` : `<div class="empty"><span class="big">🌴</span>Nothing yet. Tap + to add your first cost!
+          <div style="margin-top:14px"><button class="btn small white" data-act="load-example">📋 Load the example list</button></div></div>`}
       </div>
 
       <div class="section-title">✏️ The math</div>
@@ -493,6 +495,9 @@
     switch (el.dataset.act) {
       case 'new-item': return itemSheet();
       case 'edit-prediction': return predictionSheet();
+      case 'load-example':
+        state = exampleState(); save(); render();
+        return toast('Loaded ✨');
       case 'share': return shareText();
       case 'export': return exportBackup();
       case 'import': return document.getElementById('import-file').click();
