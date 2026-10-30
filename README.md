@@ -17,10 +17,7 @@ You install it on your iPhone from Safari; there's no App Store involved.
 
 ## Put it on your iPhone
 
-1. On GitHub, go to **Settings → Pages**. Under **Build and deployment**, choose
-   **Deploy from a branch**, then pick `main` and `/ (root)`. Save.
-2. After about a minute, the site is live at `https://<your-username>.github.io/trip-cost-tracker/`.
-3. Open that link in **Safari** on your iPhone, tap **Share ⬆️**, then **Add to Home Screen**.
+Open **https://hecbatista.github.io/trip-cost-tracker/** in **Safari** on your iPhone, tap **Share ⬆️**, then **Add to Home Screen**.
 
 It opens full-screen like a normal app.
 
@@ -32,4 +29,6 @@ It's plain HTML/CSS/JS with no build step:
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
-When you change a file, bump `VERSION` in `sw.js` so installed copies pick up the update.
+Every push to `main` is copied to the `gh-pages` branch (see `.github/workflows/deploy.yml`),
+which GitHub Pages serves. When you change a file, bump `VERSION` in `sw.js` so installed
+copies pick up the update.
