@@ -9,6 +9,18 @@
   const backdrop = document.getElementById('sheet-backdrop');
   const toastEl = document.getElementById('toast');
 
+  /* ───────── The crew ───────── */
+
+  const CREW = [
+    { id: 'sophia', name: 'Sophia', img: 'crew/sophia.webp', face: 'crew/sophia-face.webp' },
+    { id: 'elizabeth', name: 'Elizabeth', img: 'crew/elizabeth.webp', face: 'crew/elizabeth-face.webp' },
+    { id: 'jackie', name: 'Jackie', img: 'crew/jackie.webp', face: 'crew/jackie-face.webp' },
+    { id: 'hector', name: 'Hector', img: 'crew/hector.webp', face: 'crew/hector-face.webp' },
+  ];
+  const ALL = CREW.map((c) => c.id);
+  const person = (id) => CREW.find((c) => c.id === id);
+  const nameOf = (id) => (id === state.me ? 'you' : person(id) ? person(id).name : 'someone else');
+
   /* ───────── Money (everything is stored in cents) ───────── */
 
   const fmt = (c) => (c / 100).toFixed(2);
@@ -16,23 +28,53 @@
     (c < 0 ? '-$' : '$') +
     (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Your part of an item: the bill divided by how many people shared it.
-  function shareOf(item) {
-    return item.kind === 'kindness' ? 0 : Math.round(item.amount / item.split);
-  }
+  // A cost is split evenly between crew members in `people` plus `guests`
+  // (people outside the crew). `paidBy` is a crew id or 'other'.
+  const headcount = (it) => it.people.length + it.guests;
+  const shareOf = (it) => Math.round(it.amount / Math.max(1, headcount(it)));
+  const includesMe = (it) => it.people.includes(state.me);
+  const myShare = (it) => (includesMe(it) ? shareOf(it) : 0);
 
-  // What you covered for other people: everyone else's share when you paid
-  // a split bill, or the whole amount for a treat.
-  function kindnessOf(item) {
-    if (item.kind === 'kindness') return item.amount;
-    if (!item.iPaid || item.split <= 1) return 0;
-    return shareOf(item) * (item.split - 1);
+  // What you covered for everyone else on a bill you paid.
+  function kindnessOf(it) {
+    if (it.paidBy !== state.me) return 0;
+    return shareOf(it) * (headcount(it) - (includesMe(it) ? 1 : 0));
   }
 
   function totals() {
     let mine = 0, kindness = 0;
-    for (const it of state.items) { mine += shareOf(it); kindness += kindnessOf(it); }
+    for (const it of state.items) { mine += myShare(it); kindness += kindnessOf(it); }
     return { mine, kindness, left: state.prediction - mine, pocket: mine + kindness };
+  }
+
+  // Each crew member's share of everything logged on this phone.
+  function crewShares() {
+    const out = Object.fromEntries(ALL.map((id) => [id, 0]));
+    for (const it of state.items) for (const id of it.people) out[id] += shareOf(it);
+    return out;
+  }
+
+  // Who owes whom: net balances between crew members, then settle the biggest
+  // debts first so there are as few payments as possible.
+  function settleUp() {
+    const bal = Object.fromEntries(ALL.map((id) => [id, 0]));
+    for (const it of state.items) {
+      if (!person(it.paidBy)) continue;
+      const s = shareOf(it);
+      for (const id of it.people) if (id !== it.paidBy) { bal[id] -= s; bal[it.paidBy] += s; }
+    }
+    const debtors = ALL.filter((id) => bal[id] < 0).map((id) => ({ id, amt: -bal[id] })).sort((a, b) => b.amt - a.amt);
+    const creditors = ALL.filter((id) => bal[id] > 0).map((id) => ({ id, amt: bal[id] })).sort((a, b) => b.amt - a.amt);
+    const moves = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const amt = Math.min(debtors[i].amt, creditors[j].amt);
+      if (amt > 0) moves.push({ from: debtors[i].id, to: creditors[j].id, amt });
+      debtors[i].amt -= amt; creditors[j].amt -= amt;
+      if (!debtors[i].amt) i++;
+      if (!creditors[j].amt) j++;
+    }
+    return moves;
   }
 
   // Lets people type "12.50 + 4.25" or "30.95/2" in the amount box.
@@ -80,10 +122,8 @@
     [/treat|kind|friend/i, '💝'],
   ];
   const ITEM_EMOJIS = ['💸', '🚕', '✈️', '🏨', '☕', '🥪', '🍣', '🥟', '🍕', '🌮', '🍹', '🍦', '🛒', '💊', '🎨', '🏖️', '🛍️', '🎟️', '💝'];
-
-  const CREW = ['crew/crew-1.webp', 'crew/crew-2.webp', 'crew/crew-3.webp', 'crew/crew-4.webp'];
   const CHEERS = ['¡Dale! 💃', 'Wepa! ✨', 'Added! 🌴', 'On the tab 🧾', 'Miami mode 😎', 'Treat yo self 💅'];
-  const KIND_CHEERS = ['So generous 💝', 'Big heart energy 💖', 'Crew loves you 🥹'];
+  const THANKS = ['Thank youuu 💖', 'Ily 🥹', 'Next one’s on me 💝', 'Big heart energy 💖'];
   const BURST = ['💖', '🌴', '✨', '🦩', '☀️', '💸'];
 
   const guessEmoji = (name) => (EMOJI_RULES.find(([re]) => re.test(name)) || [, '💸'])[1];
@@ -92,8 +132,18 @@
 
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
+  // Older versions stored `split` (a head count), `iPaid` and a 'kindness' kind.
+  // Those become this phone's owner plus "others" outside the crew.
+  function normalize(it) {
+    if (Array.isArray(it.people)) return it;
+    const base = { id: it.id || uid(), name: it.name, amount: it.amount, emoji: it.emoji || '💸' };
+    const n = Math.max(1, it.split || 1);
+    if (it.kind === 'kindness') return { ...base, paidBy: state.me, people: [], guests: 1 };
+    return { ...base, paidBy: it.iPaid === false && n > 1 ? 'other' : state.me, people: [state.me], guests: n - 1 };
+  }
+
   // The original notes-app list, loadable from the empty screen.
-  function exampleState() {
+  function exampleItems() {
     const rows = [
       ['Uber to Airport', 3095, 2, '🚕'],
       ['Walgreens', 836, 1, '💊'],
@@ -105,11 +155,9 @@
       ['Sushi', 2274, 1, '🍣'],
       ['Dumplings', 1125, 1, '🥟'],
     ];
-    const items = rows.map(([name, amount, split, emoji]) => ({
-      id: uid(), name, amount, split, emoji, kind: 'expense', iPaid: true,
-    }));
-    items.push({ id: uid(), name: 'Treat for a friend', amount: 517, split: 1, emoji: '💝', kind: 'kindness', iPaid: true });
-    return { prediction: 37200, items };
+    const items = rows.map(([name, amount, split, emoji]) => normalize({ name, amount, split, emoji, iPaid: true }));
+    items.push(normalize({ name: 'Treat for a friend', amount: 517, emoji: '💝', kind: 'kindness' }));
+    return items;
   }
 
   const isValid = (s) => s && Array.isArray(s.items) && Number.isFinite(s.prediction);
@@ -131,11 +179,11 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
     catch { toast('Couldn’t save on this device 😬'); }
   }
-  save();
 
   /* ───────── Helpers ───────── */
 
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
   let toastTimer;
   function toast(msg) {
@@ -145,16 +193,13 @@
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1900);
   }
 
-  const pick = (list) => list[Math.floor(Math.random() * list.length)];
-
   // One of the crew slides up from the bottom with a speech bubble.
   const crewPop = document.getElementById('crew-pop');
-  let crewTimer, lastCrew = -1;
-  function crewSay(msg) {
-    let i;
-    do { i = Math.floor(Math.random() * CREW.length); } while (i === lastCrew && CREW.length > 1);
-    lastCrew = i;
-    crewPop.querySelector('img').src = CREW[i];
+  let crewTimer, lastCrew = '';
+  function crewSay(msg, who) {
+    if (!who) who = pick(ALL.filter((id) => id !== lastCrew));
+    lastCrew = who;
+    crewPop.querySelector('img').src = person(who).img;
     crewPop.querySelector('.bubble').textContent = msg;
     crewPop.classList.remove('show');
     void crewPop.offsetWidth; // restart the slide-in if it's already showing
@@ -184,25 +229,46 @@
     window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
   const formula = (cents) => (cents.length ? cents.map(fmt).join(' + ') : '0.00');
+  const faces = (ids) => ids.map((id) => `<img class="avatar" src="${person(id).face}" alt="${person(id).name}">`).join('');
 
   const DRIPS = '<span class="drip d1"></span><span class="drip d2"></span><span class="drip d3"></span><span class="drip d4"></span>';
+  const HERO = `
+      <header class="hero">
+        <span class="kicker">COST TRACKER</span>
+        <h1 class="graffiti">Miami <span class="emo">🌴</span></h1>
+        <span class="sticker s1" aria-hidden="true">☀️</span>
+        <span class="sticker s2" aria-hidden="true">🦩</span>
+        ${DRIPS}
+      </header>`;
+
+  function splitLabel(it) {
+    if (it.people.length === ALL.length && !it.guests) return 'everyone';
+    const names = it.people.map(nameOf);
+    if (it.guests) names.push(`${it.guests} other${it.guests > 1 ? 's' : ''}`);
+    return names.join(', ');
+  }
 
   /* ───────── Text export (matches the notes-app format) ───────── */
 
   function tripText() {
     const t = totals();
-    const lines = ['Cost Tracker Miami 🌴'];
+    const lines = [`Cost Tracker Miami 🌴 (${person(state.me).name})`];
     if (state.prediction) lines.push(`Prediction ${fmt(state.prediction).replace(/\.00$/, '')}`);
     lines.push('');
     for (const it of state.items) {
-      if (it.kind === 'kindness') lines.push(`${fmt(it.amount)}\t${it.name} (kindness)`);
-      else if (it.split > 1) lines.push(`${fmt(it.amount)}/${it.split} = ${fmt(shareOf(it))}\t${it.name}`);
-      else lines.push(`${fmt(it.amount)}\t${it.name}`);
+      const n = headcount(it);
+      const who = n > 1 || !includesMe(it) ? ` (${splitLabel(it)})` : '';
+      lines.push(`${n > 1 ? `${fmt(it.amount)}/${n} = ${fmt(shareOf(it))}` : fmt(it.amount)}\t${it.name}${who}`);
     }
     lines.push('', 'TOTAL');
-    lines.push(`Total: ${formula(state.items.filter((i) => i.kind !== 'kindness').map(shareOf))} = ${fmt(t.mine)}`);
+    lines.push(`Total: ${formula(state.items.filter(includesMe).map(shareOf))} = ${fmt(t.mine)}`);
     const kind = state.items.map(kindnessOf).filter(Boolean);
     if (kind.length) lines.push(`Kindness: ${formula(kind)} = ${fmt(t.kindness)}`);
+    const moves = settleUp();
+    if (moves.length) {
+      lines.push('', 'SETTLE UP');
+      for (const m of moves) lines.push(`${person(m.from).name} → ${person(m.to).name}: ${fmt(m.amt)}`);
+    }
     return lines.join('\n');
   }
 
@@ -218,34 +284,41 @@
   /* ───────── View ───────── */
 
   function render() {
+    if (!person(state.me)) { renderHello(); return; }
+
     const t = totals();
     const pct = state.prediction > 0 ? Math.min(100, (t.mine / state.prediction) * 100) : 0;
-    const barClass = t.left < 0 ? 'over' : pct >= 80 ? 'warn' : '';
+    const over = state.prediction > 0 && t.left < 0;
+    const barClass = over ? 'over' : pct >= 80 ? 'warn' : '';
+    const shares = crewShares();
+    const moves = settleUp();
 
     const items = state.items.map((it) => {
-      let math = '', amt = money(shareOf(it)), tag = '';
-      if (it.kind === 'kindness') {
-        math = 'a treat on you';
-        amt = money(it.amount);
-        tag = '<span class="tag">kindness</span>';
-      } else if (it.split > 1) {
-        math = `${fmt(it.amount)} / ${it.split} = ${fmt(shareOf(it))}`;
-        if (kindnessOf(it)) tag = `<span class="tag teal">+${fmt(kindnessOf(it))} kind</span>`;
-      }
+      const n = headcount(it);
+      const mine = includesMe(it);
+      const k = kindnessOf(it);
+      const math = n > 1 ? `${fmt(it.amount)} ÷ ${n} = ${fmt(shareOf(it))} each` : '';
+      const extra = it.guests ? `<span class="guests">+${it.guests}</span>` : '';
+      const payer = it.paidBy === state.me ? ''
+        : `<span class="paid">${person(it.paidBy) ? `${esc(person(it.paidBy).name)} paid` : 'someone else paid'}</span>`;
+      const tag = k ? `<span class="tag ${mine ? 'teal' : ''}">${mine ? `+${fmt(k)} kind` : 'kindness'}</span>` : '';
+      const amt = mine ? money(shareOf(it)) : money(k);
+      const avatars = n > 1 || !mine ? `<span class="avatars">${faces(it.people)}${extra}</span>` : '';
+      const detail = avatars + math + payer + tag;
       return `
         <li>
           <button class="item" data-edit="${it.id}">
             <span class="item-emoji">${esc(it.emoji)}</span>
             <span class="item-main">
               <div class="item-name">${esc(it.name)}</div>
-              ${math || tag ? `<div class="item-math">${math}${tag}</div>` : ''}
+              ${detail ? `<div class="item-math">${detail}</div>` : ''}
             </span>
-            <span class="item-amt">${amt}</span>
+            <span class="item-amt ${mine || k ? '' : 'muted'}">${amt}</span>
           </button>
         </li>`;
     }).join('');
 
-    const shares = state.items.filter((i) => i.kind !== 'kindness').map(shareOf);
+    const myItems = state.items.filter(includesMe).map(shareOf);
     const kinds = state.items.map(kindnessOf).filter(Boolean);
 
     let hideTip = false;
@@ -258,13 +331,7 @@
       </div>` : '';
 
     app.innerHTML = `
-      <header class="hero">
-        <span class="kicker">COST TRACKER</span>
-        <h1 class="graffiti">Miami <span class="emo">🌴</span></h1>
-        <span class="sticker s1" aria-hidden="true">☀️</span>
-        <span class="sticker s2" aria-hidden="true">🦩</span>
-        ${DRIPS}
-      </header>
+      ${HERO}
 
       <div class="stats">
         <div class="stat"><div class="stat-label">💸 My total</div><div class="stat-value">${money(t.mine)}</div></div>
@@ -273,8 +340,8 @@
           <div class="stat-label">🔮 Prediction <span class="stat-edit">✏️</span></div>
           <div class="stat-value">${state.prediction ? money(state.prediction) : 'Set it'}</div>
         </button>
-        <div class="stat"><div class="stat-label">${t.left < 0 ? '🚨 Over by' : '🌈 Left'}</div>
-          <div class="stat-value ${t.left < 0 ? 'over' : ''}">${state.prediction ? money(Math.abs(t.left)) : '—'}</div></div>
+        <div class="stat"><div class="stat-label">${over ? '🚨 Over by' : '🌈 Left'}</div>
+          <div class="stat-value ${over ? 'over' : ''}">${state.prediction ? money(Math.abs(t.left)) : '—'}</div></div>
       </div>
 
       ${state.prediction ? `
@@ -285,8 +352,24 @@
 
       <div class="section-title">💖 The crew</div>
       <div class="card crew">
-        ${CREW.map((src, i) => `<button class="crew-member" data-crew="${i}" aria-label="Boop crew member ${i + 1}"><img src="${src}" alt="" draggable="false"></button>`).join('')}
+        ${CREW.map((c) => `
+          <button class="crew-member" data-crew="${c.id}" aria-label="Boop ${c.name}">
+            <img src="${c.img}" alt="" draggable="false">
+            <span class="crew-name">${c.name}${c.id === state.me ? ' <i>you</i>' : ''}</span>
+            <span class="crew-amt">${money(shares[c.id])}</span>
+          </button>`).join('')}
       </div>
+
+      ${moves.length ? `
+        <div class="section-title">🤝 Settle up</div>
+        <div class="card settle">
+          ${moves.map((m) => `
+            <div class="settle-row ${m.from === state.me || m.to === state.me ? 'me' : ''}">
+              <span class="settle-faces">${faces([m.from])}<span class="arrow">→</span>${faces([m.to])}</span>
+              <span class="settle-text"><b>${esc(person(m.from).name)}</b> owes <b>${esc(person(m.to).name)}</b></span>
+              <span class="settle-amt">${money(m.amt)}</span>
+            </div>`).join('')}
+        </div>` : ''}
 
       <div class="section-title">🧾 Spending</div>
       <div class="card">
@@ -297,14 +380,14 @@
       <div class="section-title">✏️ The math</div>
       <div class="card receipt">
         <h3>Total</h3>
-        <p class="math">${formula(shares)} = <b>${fmt(t.mine)}</b></p>
+        <p class="math">${formula(myItems)} = <b>${fmt(t.mine)}</b></p>
         <h3>Kindness</h3>
         <p class="math">${formula(kinds)} = <b>${fmt(t.kindness)}</b></p>
         <div class="receipt-actions">
           <button class="btn small teal" data-act="share">📤 Share as text</button>
         </div>
       </div>
-      <p class="hint"><b>My total</b> is only your part of each bill. <b>Kindness</b> is what you covered for your crew: everyone else’s share when you paid a split bill, plus any treats.</p>
+      <p class="hint"><b>My total</b> is only your part of each bill. <b>Kindness</b> is what you covered for everyone else on bills you paid. <b>Settle up</b> shows who owes whom so everyone ends up even.</p>
 
       ${tip}
 
@@ -318,8 +401,24 @@
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>
 
-      <p class="footer-note">made with 💖 &amp; spray paint in the 305</p>
+      <p class="footer-note">This is ${esc(person(state.me).name)}’s phone · <button class="link" data-act="change-me">not you?</button><br>made with 💖 &amp; spray paint in the 305</p>
       <button class="fab" data-act="new-item" aria-label="Add cost">+</button>
+    `;
+  }
+
+  const helloGrid = (attr) => CREW.map((c) => `
+          <button class="crew-member" ${attr}="${c.id}">
+            <img src="${c.img}" alt="" draggable="false">
+            <span class="crew-name">${c.name}</span>
+          </button>`).join('');
+
+  // First launch: everyone picks themselves so "my total" means them.
+  function renderHello() {
+    app.innerHTML = `
+      ${HERO}
+      <div class="section-title">👋 Who are you?</div>
+      <div class="card crew hello">${helloGrid('data-me')}</div>
+      <p class="hint">Tap yourself. Your totals are your share of each bill, and the crew helps you split the rest.</p>
     `;
   }
 
@@ -345,27 +444,24 @@
     [...new Set([current, ...list])].map((e) =>
       `<button type="button" data-emoji="${esc(e)}" aria-pressed="${e === current}">${esc(e)}</button>`).join('');
 
-  function wireEmojiPicker(root, onPick) {
-    root.querySelector('.emoji-pick').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-emoji]');
-      if (!b) return;
-      root.querySelectorAll('.emoji-pick [data-emoji]').forEach((x) => x.setAttribute('aria-pressed', x === b));
-      onPick(b.dataset.emoji);
-    });
-  }
   function setPickedEmoji(root, emoji) {
-    const pick = root.querySelector('.emoji-pick');
-    let b = pick.querySelector(`[data-emoji="${CSS.escape(emoji)}"]`);
+    const pickEl = root.querySelector('.emoji-pick');
+    let b = pickEl.querySelector(`[data-emoji="${CSS.escape(emoji)}"]`);
     if (!b) {
-      pick.insertAdjacentHTML('afterbegin', `<button type="button" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`);
-      b = pick.firstElementChild;
+      pickEl.insertAdjacentHTML('afterbegin', `<button type="button" data-emoji="${esc(emoji)}">${esc(emoji)}</button>`);
+      b = pickEl.firstElementChild;
     }
-    pick.querySelectorAll('[data-emoji]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    pickEl.querySelectorAll('[data-emoji]').forEach((x) => x.setAttribute('aria-pressed', x === b));
   }
+
+  const personChip = (c, attr) =>
+    `<button type="button" class="chip" ${attr}="${c.id}"><img class="avatar" src="${c.face}" alt="">${c.id === state.me ? 'Me' : esc(c.name)}</button>`;
 
   function itemSheet(item) {
     const isNew = !item;
-    const draft = item ? { ...item } : { id: uid(), name: '', amount: 0, split: 1, emoji: '💸', kind: 'expense', iPaid: true };
+    const draft = item
+      ? { ...item, people: [...item.people] }
+      : { id: uid(), name: '', amount: 0, emoji: '💸', paidBy: state.me, people: [state.me], guests: 0 };
     let emojiTouched = !isNew;
 
     openSheet(`
@@ -379,25 +475,23 @@
           <input class="input money" name="amount" inputmode="decimal" placeholder="0.00" value="${draft.amount ? fmt(draft.amount) : ''}" required>
         </label>
 
-        <label class="toggle">
-          <input type="checkbox" name="treat" ${draft.kind === 'kindness' ? 'checked' : ''}>
-          <span class="switch"></span>
-          <span class="t-text">It’s a treat for someone 💝<small>Counts only as kindness, not your total</small></span>
-        </label>
-
-        <div id="split-wrap">
-          <div class="field"><span style="display:block;margin:0 0 6px 4px;font-weight:600;font-size:14px">Split between</span>
-            <div class="stepper">
-              <button type="button" data-step="-1" aria-label="Fewer people">−</button>
-              <output id="split-out">${draft.split} ${draft.split === 1 ? 'person (just me)' : 'people'}</output>
-              <button type="button" data-step="1" aria-label="More people">+</button>
-            </div>
+        <div class="field"><span>Who paid?</span>
+          <div class="chips" id="paid-chips">
+            ${CREW.map((c) => personChip(c, 'data-paid')).join('')}
+            <button type="button" class="chip" data-paid="other">🙋 Someone else</button>
           </div>
-          <label class="toggle" id="paid-wrap">
-            <input type="checkbox" name="iPaid" ${draft.iPaid ? 'checked' : ''}>
-            <span class="switch"></span>
-            <span class="t-text">I paid the whole bill<small>Their shares count as kindness</small></span>
-          </label>
+        </div>
+
+        <div class="field"><span>Split between</span>
+          <div class="chips" id="split-chips">
+            <button type="button" class="chip everyone" data-everyone>👯 Everyone</button>
+            ${CREW.map((c) => personChip(c, 'data-person')).join('')}
+          </div>
+          <div class="stepper guests-stepper">
+            <button type="button" data-step="-1" aria-label="Fewer other people">−</button>
+            <output id="guests-out"></output>
+            <button type="button" data-step="1" aria-label="More other people">+</button>
+          </div>
         </div>
 
         <div class="preview" id="preview"></div>
@@ -416,30 +510,57 @@
       const update = () => {
         const v = evalAmount(amountEl.value);
         draft.amount = Number.isFinite(v) && v > 0 ? Math.round(v * 100) : 0;
-        draft.kind = form.elements.treat.checked ? 'kindness' : 'expense';
-        draft.iPaid = form.elements.iPaid.checked;
-        root.querySelector('#split-wrap').hidden = draft.kind === 'kindness';
-        root.querySelector('#paid-wrap').hidden = draft.split <= 1;
-        root.querySelector('#split-out').textContent = `${draft.split} ${draft.split === 1 ? 'person (just me)' : 'people'}`;
+        root.querySelectorAll('[data-paid]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.paid === draft.paidBy));
+        root.querySelectorAll('[data-person]').forEach((b) => b.setAttribute('aria-pressed', draft.people.includes(b.dataset.person)));
+        root.querySelector('[data-everyone]').setAttribute('aria-pressed', ALL.every((id) => draft.people.includes(id)));
+        root.querySelector('#guests-out').textContent =
+          draft.guests ? `+ ${draft.guests} not in the crew` : '+ others not in the crew';
 
         const p = root.querySelector('#preview');
+        const n = headcount(draft);
+        if (!n) { p.innerHTML = 'Pick who it’s split between 👆'; return; }
         if (!draft.amount) { p.innerHTML = 'Type an amount. Math like <b>12.50+4</b> works too.'; return; }
         const k = kindnessOf(draft);
-        p.innerHTML = draft.kind === 'kindness'
-          ? `Kindness <b>${money(k)}</b> 💝`
-          : `Your share <b>${money(shareOf(draft))}</b>${k ? ` · Kindness <b>${money(k)}</b>` : ''}`;
+        const parts = [];
+        if (n > 1) parts.push(`<b>${money(shareOf(draft))}</b> each`);
+        parts.push(`Your share <b>${money(myShare(draft))}</b>`);
+        if (k) parts.push(`Kindness <b>${money(k)}</b> 💝`);
+        p.innerHTML = parts.join(' · ');
       };
 
-      wireEmojiPicker(root, (e) => { draft.emoji = e; emojiTouched = true; });
+      root.querySelector('.emoji-pick').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-emoji]');
+        if (!b) return;
+        draft.emoji = b.dataset.emoji;
+        emojiTouched = true;
+        setPickedEmoji(root, draft.emoji);
+      });
       nameEl.addEventListener('input', () => {
         if (emojiTouched) return;
         draft.emoji = guessEmoji(nameEl.value);
         setPickedEmoji(root, draft.emoji);
       });
       amountEl.addEventListener('input', update);
-      form.addEventListener('change', update);
+
+      root.querySelector('#paid-chips').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-paid]');
+        if (b) { draft.paidBy = b.dataset.paid; update(); }
+      });
+      root.querySelector('#split-chips').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-person],[data-everyone]');
+        if (!b) return;
+        if (b.hasAttribute('data-everyone')) {
+          draft.people = ALL.every((id) => draft.people.includes(id)) ? [state.me] : [...ALL];
+        } else {
+          const id = b.dataset.person;
+          draft.people = draft.people.includes(id)
+            ? draft.people.filter((x) => x !== id)
+            : ALL.filter((x) => x === id || draft.people.includes(x));
+        }
+        update();
+      });
       root.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
-        draft.split = Math.max(1, Math.min(30, draft.split + Number(b.dataset.step)));
+        draft.guests = Math.max(0, Math.min(20, draft.guests + Number(b.dataset.step)));
         update();
       }));
 
@@ -449,13 +570,16 @@
         draft.name = nameEl.value.trim();
         if (!draft.name) { nameEl.focus(); return; }
         if (!draft.amount) { amountEl.focus(); toast('Add an amount 💸'); return; }
-        if (draft.kind === 'kindness') draft.split = 1;
+        if (!headcount(draft)) { toast('Pick who it’s split between 👯'); return; }
         if (isNew) state.items.push(draft);
         else state.items[state.items.findIndex((i) => i.id === draft.id)] = draft;
         save(); closeSheet(); render();
-        if (!isNew) toast('Saved ✨');
-        else if (totals().left < 0 && state.prediction) crewSay('Uh oh… over budget 🚨');
-        else crewSay(pick(kindnessOf(draft) ? KIND_CHEERS : CHEERS));
+        if (!isNew) { toast('Saved ✨'); return; }
+        // Whoever you just covered says thanks; otherwise a random cheer.
+        const covered = draft.paidBy === state.me ? draft.people.filter((id) => id !== state.me) : [];
+        if (state.prediction && totals().left < 0) crewSay('Uh oh… over budget 🚨');
+        else if (covered.length) crewSay(pick(THANKS), pick(covered));
+        else crewSay(pick(CHEERS));
       });
 
       root.querySelector('[data-act="cancel"]').addEventListener('click', closeSheet);
@@ -499,6 +623,35 @@
     });
   }
 
+  function chooseMe(id) {
+    state.me = id;
+    state.items = state.items.map(normalize);
+    save(); render();
+    crewSay(`Hi ${person(id).name}! 🌴`, id);
+  }
+
+  // Re-pick who this phone belongs to, swapping them with the old owner on
+  // every cost so "me" entries follow the right person.
+  function switchMe() {
+    const prev = state.me;
+    openSheet(`
+      <h2>Who are you? 👋</h2>
+      <div class="crew hello">${helloGrid('data-switch')}</div>
+    `, (root) => root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-switch]');
+      if (!b) return;
+      const id = b.dataset.switch;
+      const swap = (x) => (x === prev ? id : x === id ? prev : x);
+      state.items = state.items.map((it) => {
+        const people = it.people.map(swap);
+        return { ...it, paidBy: swap(it.paidBy), people: ALL.filter((p) => people.includes(p)) };
+      });
+      state.me = id;
+      save(); closeSheet(); render();
+      crewSay(`Hi ${person(id).name}! 🌴`, id);
+    }));
+  }
+
   /* ───────── Backup ───────── */
 
   async function exportBackup() {
@@ -525,7 +678,9 @@
         const s = JSON.parse(reader.result);
         if (!isValid(s)) throw new Error('bad file');
         if (!confirm('Replace the costs on this phone with the backup?')) return;
-        state = s; save(); render();
+        state = { ...s, me: person(s.me) ? s.me : state.me };
+        state.items = state.items.map(normalize);
+        save(); render();
         toast('Restored ✨');
       } catch { toast('That file isn’t a Miami backup 🤔'); }
     };
@@ -535,16 +690,20 @@
   /* ───────── Events ───────── */
 
   app.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-act],[data-edit],[data-crew]');
+    const el = e.target.closest('[data-act],[data-edit],[data-crew],[data-me]');
     if (!el) return;
+    if (el.dataset.me) return chooseMe(el.dataset.me);
     if (el.dataset.crew) return boing(el);
     if (el.dataset.edit) return itemSheet(state.items.find((i) => i.id === el.dataset.edit));
 
     switch (el.dataset.act) {
       case 'new-item': return itemSheet();
       case 'edit-prediction': return predictionSheet();
+      case 'change-me': return switchMe();
       case 'load-example':
-        state = exampleState(); save(); render();
+        state.items = exampleItems();
+        if (!state.prediction) state.prediction = 37200;
+        save(); render();
         return toast('Loaded ✨');
       case 'share': return shareText();
       case 'export': return exportBackup();
@@ -559,6 +718,7 @@
     if (e.target.id === 'import-file' && e.target.files[0]) importBackup(e.target.files[0]);
   });
 
+  if (person(state.me)) { state.items = state.items.map(normalize); save(); }
   render();
 
   if ('serviceWorker' in navigator) {

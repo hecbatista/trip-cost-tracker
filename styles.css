@@ -454,6 +454,71 @@ button.stat:active { transform: translate(3px, 3px); box-shadow: none; }
   100% { transform: rotate(var(--r)); }
 }
 
+.crew-name, .crew-amt { display: block; text-align: center; white-space: nowrap; }
+.crew-name { margin-top: 6px; font-family: var(--font-display); font-size: clamp(10px, 3vw, 13px); }
+.crew-name i {
+  font-style: normal; font-family: var(--font-body); font-weight: 700; font-size: 10px;
+  padding: 0 5px; background: var(--pink); color: var(--paper);
+  border: 2px solid var(--ink); border-radius: 999px; vertical-align: 1px;
+}
+.crew-amt { font-size: 13px; font-weight: 600; color: var(--muted); }
+.crew.hello { gap: 10px; padding-bottom: 18px; }
+
+/* faces */
+.avatar {
+  width: 26px; height: 26px; flex: none;
+  border: 2px solid var(--ink); border-radius: 50%;
+  object-fit: cover; background: var(--cream);
+}
+.avatars { display: inline-flex; align-items: center; margin-right: 6px; vertical-align: middle; }
+.avatars .avatar { width: 22px; height: 22px; }
+.avatars .avatar + .avatar { margin-left: -7px; }
+.guests {
+  margin-left: -5px; padding: 0 5px; height: 22px; display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 700; background: var(--yellow);
+  border: 2px solid var(--ink); border-radius: 999px;
+}
+.avatars:empty { display: none; }
+.item-math { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; }
+.item-math .tag { margin-left: 6px; }
+.paid {
+  margin-left: 6px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+  background: var(--lilac); border: 2px solid var(--ink); border-radius: 999px;
+}
+.item-amt.muted { color: var(--muted); opacity: .6; }
+
+/* person chips in the add-cost sheet */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 4px 12px 4px 5px;
+  font-weight: 600; font-size: 15px;
+  background: var(--paper); border: var(--border); border-radius: 999px;
+}
+.chip:not(:has(.avatar)) { padding-left: 12px; }
+.chip[aria-pressed="true"] { background: var(--teal-soft); box-shadow: var(--pop-sm); transform: translate(-1px, -1px); }
+#paid-chips .chip[aria-pressed="true"] { background: var(--yellow); }
+.chip.everyone[aria-pressed="true"] { background: var(--pink); color: var(--paper); }
+.guests-stepper { margin-top: 10px; height: 46px; }
+.guests-stepper button { width: 34px; height: 34px; font-size: 17px; }
+.guests-stepper output { font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+
+/* settle up */
+.settle { padding: 6px 14px; }
+.settle-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.settle-row + .settle-row { border-top: 2px dashed rgba(35, 18, 63, .15); }
+.settle-faces { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.settle-faces .avatar { width: 34px; height: 34px; }
+.arrow { font-family: var(--font-display); font-size: 16px; }
+.settle-text { flex: 1; min-width: 0; font-size: 15px; }
+.settle-amt { font-family: var(--font-display); font-size: 17px; white-space: nowrap; }
+.settle-row.me .settle-amt { color: var(--pink); }
+
+.link {
+  padding: 0; background: none; border: 0;
+  font: inherit; color: var(--pink); font-weight: 700; text-decoration: underline;
+}
+
 /* emoji confetti from a tapped sticker */
 .burst {
   position: absolute; left: 50%; top: 35%; z-index: 5;
