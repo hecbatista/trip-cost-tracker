@@ -49,6 +49,7 @@ body {
 }
 
 button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
 button { cursor: pointer; }
 
 /* ───────── Mural blobs behind everything ───────── */
@@ -277,6 +278,7 @@ button.stat:active { transform: translate(3px, 3px); box-shadow: none; }
   vertical-align: 1px;
 }
 .tag.teal { background: var(--teal); color: var(--ink); }
+.tag.lilac { background: var(--lilac); color: var(--ink); }
 
 .empty { padding: 30px 20px; text-align: center; color: var(--muted); }
 .empty .big { font-size: 46px; display: block; margin-bottom: 8px; }

@@ -29,17 +29,21 @@
     (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // A cost is split evenly between crew members in `people` plus `guests`
-  // (people outside the crew). `paidBy` is a crew id or 'other'.
+  // (people outside the crew). `paidBy` is a crew id or 'other'. `treat` means
+  // the payer said "I got it": nobody pays them back.
   const headcount = (it) => it.people.length + it.guests;
   const shareOf = (it) => Math.round(it.amount / Math.max(1, headcount(it)));
   const includesMe = (it) => it.people.includes(state.me);
-  const myShare = (it) => (includesMe(it) ? shareOf(it) : 0);
+  const treatedByOther = (it) => it.treat && it.paidBy !== state.me;
+  const countsForMe = (it) => includesMe(it) && !treatedByOther(it);
+  const myShare = (it) => (countsForMe(it) ? shareOf(it) : 0);
+  // Everyone's shares except the payer's own.
+  const coveredOf = (it) => shareOf(it) * (headcount(it) - (it.people.includes(it.paidBy) ? 1 : 0));
 
-  // What you covered for everyone else on a bill you paid.
-  function kindnessOf(it) {
-    if (it.paidBy !== state.me) return 0;
-    return shareOf(it) * (headcount(it) - (includesMe(it) ? 1 : 0));
-  }
+  // Kindness: what you covered for others when you said "I got it".
+  const kindnessOf = (it) => (it.treat && it.paidBy === state.me ? coveredOf(it) : 0);
+  // What others will pay you back for a bill you fronted.
+  const owedToMe = (it) => (!it.treat && it.paidBy === state.me ? coveredOf(it) : 0);
 
   function totals() {
     let mine = 0, kindness = 0;
@@ -50,7 +54,9 @@
   // Each crew member's share of everything logged on this phone.
   function crewShares() {
     const out = Object.fromEntries(ALL.map((id) => [id, 0]));
-    for (const it of state.items) for (const id of it.people) out[id] += shareOf(it);
+    for (const it of state.items) {
+      for (const id of it.people) if (!it.treat || id === it.paidBy) out[id] += shareOf(it);
+    }
     return out;
   }
 
@@ -59,7 +65,7 @@
   function settleUp() {
     const bal = Object.fromEntries(ALL.map((id) => [id, 0]));
     for (const it of state.items) {
-      if (!person(it.paidBy)) continue;
+      if (!person(it.paidBy) || it.treat) continue;
       const s = shareOf(it);
       for (const id of it.people) if (id !== it.paidBy) { bal[id] -= s; bal[it.paidBy] += s; }
     }
@@ -124,6 +130,7 @@
   const ITEM_EMOJIS = ['💸', '🚕', '✈️', '🏨', '☕', '🥪', '🍣', '🥟', '🍕', '🌮', '🍹', '🍦', '🛒', '💊', '🎨', '🏖️', '🛍️', '🎟️', '💝'];
   const CHEERS = ['¡Dale! 💃', 'Wepa! ✨', 'Added! 🌴', 'On the tab 🧾', 'Miami mode 😎', 'Treat yo self 💅'];
   const THANKS = ['Thank youuu 💖', 'Ily 🥹', 'Next one’s on me 💝', 'Big heart energy 💖'];
+  const PAYBACK = ['I’ll pay you back! 🤝', 'Venmo coming 💸', 'I owe you one 😘'];
   const BURST = ['💖', '🌴', '✨', '🦩', '☀️', '💸'];
 
   const guessEmoji = (name) => (EMOJI_RULES.find(([re]) => re.test(name)) || [, '💸'])[1];
@@ -133,13 +140,15 @@
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
   // Older versions stored `split` (a head count), `iPaid` and a 'kindness' kind.
-  // Those become this phone's owner plus "others" outside the crew.
+  // Those become this phone's owner plus "others" outside the crew; anything
+  // they counted as kindness becomes an "I got it" treat.
   function normalize(it) {
-    if (Array.isArray(it.people)) return it;
+    if (Array.isArray(it.people)) return { treat: false, ...it };
     const base = { id: it.id || uid(), name: it.name, amount: it.amount, emoji: it.emoji || '💸' };
     const n = Math.max(1, it.split || 1);
-    if (it.kind === 'kindness') return { ...base, paidBy: state.me, people: [], guests: 1 };
-    return { ...base, paidBy: it.iPaid === false && n > 1 ? 'other' : state.me, people: [state.me], guests: n - 1 };
+    if (it.kind === 'kindness') return { ...base, paidBy: state.me, people: [], guests: 1, treat: true };
+    const iPaid = it.iPaid !== false || n === 1;
+    return { ...base, paidBy: iPaid ? state.me : 'other', people: [state.me], guests: n - 1, treat: iPaid && n > 1 };
   }
 
   // The original notes-app list, loadable from the empty screen.
@@ -258,10 +267,10 @@
     for (const it of state.items) {
       const n = headcount(it);
       const who = n > 1 || !includesMe(it) ? ` (${splitLabel(it)})` : '';
-      lines.push(`${n > 1 ? `${fmt(it.amount)}/${n} = ${fmt(shareOf(it))}` : fmt(it.amount)}\t${it.name}${who}`);
+      lines.push(`${n > 1 ? `${fmt(it.amount)}/${n} = ${fmt(shareOf(it))}` : fmt(it.amount)}\t${it.name}${who}${it.treat ? ' 💝' : ''}`);
     }
     lines.push('', 'TOTAL');
-    lines.push(`Total: ${formula(state.items.filter(includesMe).map(shareOf))} = ${fmt(t.mine)}`);
+    lines.push(`Total: ${formula(state.items.filter(countsForMe).map(shareOf))} = ${fmt(t.mine)}`);
     const kind = state.items.map(kindnessOf).filter(Boolean);
     if (kind.length) lines.push(`Kindness: ${formula(kind)} = ${fmt(t.kindness)}`);
     const moves = settleUp();
@@ -296,13 +305,18 @@
     const items = state.items.map((it) => {
       const n = headcount(it);
       const mine = includesMe(it);
+      const counts = countsForMe(it);
       const k = kindnessOf(it);
+      const owed = owedToMe(it);
       const math = n > 1 ? `${fmt(it.amount)} ÷ ${n} = ${fmt(shareOf(it))} each` : '';
       const extra = it.guests ? `<span class="guests">+${it.guests}</span>` : '';
-      const payer = it.paidBy === state.me ? ''
-        : `<span class="paid">${person(it.paidBy) ? `${esc(person(it.paidBy).name)} paid` : 'someone else paid'}</span>`;
-      const tag = k ? `<span class="tag ${mine ? 'teal' : ''}">${mine ? `+${fmt(k)} kind` : 'kindness'}</span>` : '';
-      const amt = mine ? money(shareOf(it)) : money(k);
+      const payerName = person(it.paidBy) ? person(it.paidBy).name : 'Someone';
+      const payer = it.paidBy === state.me || it.treat ? '' : `<span class="paid">${esc(payerName)} paid</span>`;
+      let tag = '';
+      if (k) tag = `<span class="tag">💝 ${mine ? `+${fmt(k)}` : fmt(k)} kind</span>`;
+      else if (treatedByOther(it)) tag = `<span class="tag lilac">${esc(payerName)}’s treat 💝</span>`;
+      else if (owed) tag = `<span class="tag teal">+${fmt(owed)} owed</span>`;
+      const amt = counts ? money(shareOf(it)) : money(k);
       const avatars = n > 1 || !mine ? `<span class="avatars">${faces(it.people)}${extra}</span>` : '';
       const detail = avatars + math + payer + tag;
       return `
@@ -313,12 +327,12 @@
               <div class="item-name">${esc(it.name)}</div>
               ${detail ? `<div class="item-math">${detail}</div>` : ''}
             </span>
-            <span class="item-amt ${mine || k ? '' : 'muted'}">${amt}</span>
+            <span class="item-amt ${counts || k ? '' : 'muted'}">${amt}</span>
           </button>
         </li>`;
     }).join('');
 
-    const myItems = state.items.filter(includesMe).map(shareOf);
+    const myItems = state.items.filter(countsForMe).map(shareOf);
     const kinds = state.items.map(kindnessOf).filter(Boolean);
 
     let hideTip = false;
@@ -387,7 +401,7 @@
           <button class="btn small teal" data-act="share">📤 Share as text</button>
         </div>
       </div>
-      <p class="hint"><b>My total</b> is only your part of each bill. <b>Kindness</b> is what you covered for everyone else on bills you paid. <b>Settle up</b> shows who owes whom so everyone ends up even.</p>
+      <p class="hint"><b>My total</b> is only your part of each bill. <b>Kindness</b> is what you covered when you told friends “I got it.” Anything they’ll pay you back for goes to <b>Settle up</b> instead.</p>
 
       ${tip}
 
@@ -461,7 +475,7 @@
     const isNew = !item;
     const draft = item
       ? { ...item, people: [...item.people] }
-      : { id: uid(), name: '', amount: 0, emoji: '💸', paidBy: state.me, people: [state.me], guests: 0 };
+      : { id: uid(), name: '', amount: 0, emoji: '💸', paidBy: state.me, people: [state.me], guests: 0, treat: false };
     let emojiTouched = !isNew;
 
     openSheet(`
@@ -494,6 +508,12 @@
           </div>
         </div>
 
+        <label class="toggle" id="treat-wrap">
+          <input type="checkbox" name="treat" id="treat" ${draft.treat ? 'checked' : ''}>
+          <span class="switch"></span>
+          <span class="t-text"><span id="treat-title"></span><small id="treat-sub"></small></span>
+        </label>
+
         <div class="preview" id="preview"></div>
 
         <div class="sheet-actions">
@@ -516,6 +536,16 @@
         root.querySelector('#guests-out').textContent =
           draft.guests ? `+ ${draft.guests} not in the crew` : '+ others not in the crew';
 
+        // "I got it" only makes sense when the payer covers someone else.
+        const coversOthers = headcount(draft) - (draft.people.includes(draft.paidBy) ? 1 : 0) > 0;
+        root.querySelector('#treat-wrap').hidden = !coversOthers;
+        draft.treat = coversOthers && form.elements.treat.checked;
+        const payerName = draft.paidBy === state.me ? 'I' : person(draft.paidBy) ? person(draft.paidBy).name : 'Someone else';
+        root.querySelector('#treat-title').textContent = `${payerName} got it 💝`;
+        root.querySelector('#treat-sub').textContent = draft.paidBy === state.me
+          ? 'Nobody pays you back. Counts as your kindness.'
+          : `Nobody pays ${draft.paidBy === 'other' ? 'them' : payerName} back.`;
+
         const p = root.querySelector('#preview');
         const n = headcount(draft);
         if (!n) { p.innerHTML = 'Pick who it’s split between 👆'; return; }
@@ -525,6 +555,7 @@
         if (n > 1) parts.push(`<b>${money(shareOf(draft))}</b> each`);
         parts.push(`Your share <b>${money(myShare(draft))}</b>`);
         if (k) parts.push(`Kindness <b>${money(k)}</b> 💝`);
+        if (owedToMe(draft)) parts.push(`Owed back <b>${money(owedToMe(draft))}</b> 🤝`);
         p.innerHTML = parts.join(' · ');
       };
 
@@ -541,6 +572,7 @@
         setPickedEmoji(root, draft.emoji);
       });
       amountEl.addEventListener('input', update);
+      form.elements.treat.addEventListener('change', update);
 
       root.querySelector('#paid-chips').addEventListener('click', (e) => {
         const b = e.target.closest('[data-paid]');
@@ -578,7 +610,7 @@
         // Whoever you just covered says thanks; otherwise a random cheer.
         const covered = draft.paidBy === state.me ? draft.people.filter((id) => id !== state.me) : [];
         if (state.prediction && totals().left < 0) crewSay('Uh oh… over budget 🚨');
-        else if (covered.length) crewSay(pick(THANKS), pick(covered));
+        else if (covered.length) crewSay(pick(draft.treat ? THANKS : PAYBACK), pick(covered));
         else crewSay(pick(CHEERS));
       });
 

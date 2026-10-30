@@ -11,7 +11,8 @@ You install it on your iPhone from Safari; there's no App Store involved.
 - **Costs** record who paid and who it's split between: everyone, any mix of the crew, plus
   people outside the crew. Each share is `total ÷ people` (for example `30.95 / 2 = 15.48`).
   The amount box also does math, like `12.50+4`.
-- **Kindness** is what you covered for everyone else on bills you paid.
+- **Kindness** is what you covered when you told friends "I got it" (the 💝 switch on a cost).
+  Costs they'll pay you back for aren't kindness; they show up in Settle up instead.
 - **Settle up** nets out who owes whom with as few payments as possible.
 - **The math** shows the same `Total: … = 124.95` / `Kindness: … = 47.11` lines as a
   notes-app list, and **Share as text** sends them anywhere.
