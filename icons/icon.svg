@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ff4fa0"/>
+  <circle cx="96" cy="96" r="120" fill="#ffd23f"/>
+  <circle cx="440" cy="430" r="130" fill="#00bfc4"/>
+  <circle cx="420" cy="90" r="46" fill="#8b5cf6"/>
+  <g transform="translate(256 262) rotate(-8)">
+    <rect x="-150" y="-120" width="300" height="250" rx="40" fill="#23123f" transform="translate(12 12)"/>
+    <rect x="-150" y="-120" width="300" height="250" rx="40" fill="#fff4e4" stroke="#23123f" stroke-width="14"/>
+    <rect x="-150" y="-120" width="300" height="70" rx="40" fill="#ffd23f" stroke="#23123f" stroke-width="14"/>
+    <rect x="-143" y="-70" width="286" height="20" fill="#ffd23f"/>
+    <line x1="-150" y1="-50" x2="150" y2="-50" stroke="#23123f" stroke-width="14"/>
+    <text x="0" y="78" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="150" fill="#ff4fa0" stroke="#23123f" stroke-width="10" paint-order="stroke">$</text>
+  </g>
+  <text x="384" y="200" font-size="110" text-anchor="middle">🌴</text>
+</svg>
