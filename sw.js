@@ -1,5 +1,5 @@
 // Bump VERSION whenever you change app files so phones pick up the update.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `trip-shell-${VERSION}`;
 const FONTS = 'trip-fonts';
 const ASSETS = [

@@ -1,8 +1,9 @@
 (() => {
   'use strict';
 
-  const STORE_KEY = 'wynwood-trip-tracker:v1';
-  const TIP_KEY = 'wynwood-trip-tracker:hide-install-tip';
+  const STORE_KEY = 'cost-tracker-miami:v1';
+  const OLD_STORE_KEY = 'wynwood-trip-tracker:v1';
+  const TIP_KEY = 'cost-tracker-miami:hide-install-tip';
   const app = document.getElementById('app');
   const sheet = document.getElementById('sheet');
   const backdrop = document.getElementById('sheet-backdrop');
@@ -28,10 +29,10 @@
     return shareOf(item) * (item.split - 1);
   }
 
-  function totals(trip) {
+  function totals() {
     let mine = 0, kindness = 0;
-    for (const it of trip.items) { mine += shareOf(it); kindness += kindnessOf(it); }
-    return { mine, kindness, left: trip.prediction - mine, pocket: mine + kindness };
+    for (const it of state.items) { mine += shareOf(it); kindness += kindnessOf(it); }
+    return { mine, kindness, left: state.prediction - mine, pocket: mine + kindness };
   }
 
   // Lets people type "12.50 + 4.25" or "30.95/2" in the amount box.
@@ -79,7 +80,6 @@
     [/treat|kind|friend/i, '💝'],
   ];
   const ITEM_EMOJIS = ['💸', '🚕', '✈️', '🏨', '☕', '🥪', '🍣', '🥟', '🍕', '🌮', '🍹', '🍦', '🛒', '💊', '🎨', '🏖️', '🛍️', '🎟️', '💝'];
-  const TRIP_EMOJIS = ['🌴', '🦩', '🏖️', '🌺', '🌞', '🗽', '🗼', '🏔️', '🎡', '🌮', '🍕', '🎨', '✈️', '🚗'];
 
   const guessEmoji = (name) => (EMOJI_RULES.find(([re]) => re.test(name)) || [, '💸'])[1];
 
@@ -103,14 +103,19 @@
       id: uid(), name, amount, split, emoji, kind: 'expense', iPaid: true,
     }));
     items.push({ id: uid(), name: 'Treat for a friend', amount: 517, split: 1, emoji: '💝', kind: 'kindness', iPaid: true });
-    const trip = { id: uid(), name: 'Miami', emoji: '🌴', prediction: 37200, items };
-    return { trips: [trip] };
+    return { prediction: 37200, items };
   }
+
+  const isValid = (s) => s && Array.isArray(s.items) && Number.isFinite(s.prediction);
 
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (s && Array.isArray(s.trips)) return s;
+      if (isValid(s)) return s;
+      // Carry over costs saved by the earlier multi-trip version.
+      const old = JSON.parse(localStorage.getItem(OLD_STORE_KEY));
+      const trip = old && Array.isArray(old.trips) && (old.trips.find((t) => /miami/i.test(t.name)) || old.trips[0]);
+      if (trip) return { prediction: trip.prediction || 0, items: trip.items || [] };
     } catch { /* fall through */ }
     return seedState();
   }
@@ -121,8 +126,6 @@
     catch { toast('Couldn’t save on this device 😬'); }
   }
   save();
-
-  const findTrip = (id) => state.trips.find((t) => t.id === id);
 
   /* ───────── Helpers ───────── */
 
@@ -139,112 +142,46 @@
   const isStandalone = () =>
     window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
-  function go(hash) { location.hash = hash; }
+  const formula = (cents) => (cents.length ? cents.map(fmt).join(' + ') : '0.00');
+
+  const DRIPS = '<span class="drip d1"></span><span class="drip d2"></span><span class="drip d3"></span><span class="drip d4"></span>';
 
   /* ───────── Text export (matches the notes-app format) ───────── */
 
-  function tripText(trip) {
-    const t = totals(trip);
-    const lines = [`Cost Tracker ${trip.name} ${trip.emoji}`];
-    if (trip.prediction) lines.push(`Prediction ${fmt(trip.prediction).replace(/\.00$/, '')}`);
+  function tripText() {
+    const t = totals();
+    const lines = ['Cost Tracker Miami 🌴'];
+    if (state.prediction) lines.push(`Prediction ${fmt(state.prediction).replace(/\.00$/, '')}`);
     lines.push('');
-    for (const it of trip.items) {
+    for (const it of state.items) {
       if (it.kind === 'kindness') lines.push(`${fmt(it.amount)}\t${it.name} (kindness)`);
       else if (it.split > 1) lines.push(`${fmt(it.amount)}/${it.split} = ${fmt(shareOf(it))}\t${it.name}`);
       else lines.push(`${fmt(it.amount)}\t${it.name}`);
     }
     lines.push('', 'TOTAL');
-    lines.push(`Total: ${formula(trip.items.filter((i) => i.kind !== 'kindness').map(shareOf))} = ${fmt(t.mine)}`);
-    const kind = trip.items.map(kindnessOf).filter(Boolean);
+    lines.push(`Total: ${formula(state.items.filter((i) => i.kind !== 'kindness').map(shareOf))} = ${fmt(t.mine)}`);
+    const kind = state.items.map(kindnessOf).filter(Boolean);
     if (kind.length) lines.push(`Kindness: ${formula(kind)} = ${fmt(t.kindness)}`);
     return lines.join('\n');
   }
 
-  const DRIPS = '<span class="drip d1"></span><span class="drip d2"></span><span class="drip d3"></span><span class="drip d4"></span>';
-
-  const formula = (cents) => (cents.length ? cents.map(fmt).join(' + ') : '0.00');
-
-  async function shareTrip(trip) {
-    const text = tripText(trip);
+  async function shareText() {
+    const text = tripText();
     try {
-      if (navigator.share) { await navigator.share({ title: `Cost Tracker ${trip.name}`, text }); return; }
+      if (navigator.share) { await navigator.share({ title: 'Cost Tracker Miami', text }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(text); toast('Copied to clipboard ✨'); }
     catch { toast('Couldn’t copy 😬'); }
   }
 
-  /* ───────── Views ───────── */
+  /* ───────── View ───────── */
 
   function render() {
-    const m = location.hash.match(/^#\/trip\/(.+)$/);
-    const trip = m && findTrip(m[1]);
-    app.dataset.trip = trip ? trip.id : '';
-    if (trip) renderTrip(trip); else renderTrips();
-    window.scrollTo(0, 0);
-  }
-
-  function renderTrips() {
-    document.title = 'Trip Cost Tracker';
-    const cards = state.trips.map((trip) => {
-      const t = totals(trip);
-      const sub = trip.prediction ? `${money(t.mine)} of ${money(trip.prediction)}` : `${money(t.mine)} spent`;
-      return `
-        <button class="card trip-card" data-open="${trip.id}">
-          <span class="trip-emoji">${esc(trip.emoji)}</span>
-          <span>
-            <div class="trip-name">${esc(trip.name)}</div>
-            <div class="trip-sub">${sub} · ${trip.items.length} item${trip.items.length === 1 ? '' : 's'}</div>
-          </span>
-        </button>`;
-    }).join('');
-
-    let hideTip = false;
-    try { hideTip = localStorage.getItem(TIP_KEY) === '1'; } catch { /* ignore */ }
-    const tip = !isStandalone() && !hideTip ? `
-      <div class="card install-tip">
-        <b>📲 Put me on your Home Screen!</b><br>
-        In Safari, tap <b>Share</b> <span aria-hidden="true">⬆️</span> then <b>Add to Home Screen</b>.
-        <div style="margin-top:10px"><button class="btn small white" data-act="hide-tip">Got it</button></div>
-      </div>` : '';
-
-    app.innerHTML = `
-      <header class="hero">
-        <span class="kicker">TRIP COSTS</span>
-        <h1 class="graffiti">Where to next?</h1>
-        <span class="sticker s1" aria-hidden="true">🌴</span>
-        <span class="sticker s2" aria-hidden="true">🦩</span>
-        ${DRIPS}
-      </header>
-
-      <div class="section-title">🗺️ Your trips</div>
-      <div class="trips">
-        ${cards || `<div class="card empty"><span class="big">🧳</span>No trips yet. Tap + to start one!</div>`}
-      </div>
-
-      ${tip}
-
-      <div class="section-title">💾 Backup</div>
-      <div class="card receipt">
-        <p class="math" style="margin-bottom:12px">Your trips live on this phone. Save a backup file now and then so you never lose them.</p>
-        <div class="receipt-actions">
-          <button class="btn small white" data-act="export">⬇️ Save backup</button>
-          <button class="btn small white" data-act="import">⬆️ Restore</button>
-        </div>
-        <input type="file" id="import-file" accept="application/json,.json" hidden>
-      </div>
-
-      <p class="footer-note">made with 💖 &amp; spray paint</p>
-      <button class="fab" data-act="new-trip" aria-label="New trip">+</button>
-    `;
-  }
-
-  function renderTrip(trip) {
-    document.title = `${trip.name} · Trip Costs`;
-    const t = totals(trip);
-    const pct = trip.prediction > 0 ? Math.min(100, (t.mine / trip.prediction) * 100) : 0;
+    const t = totals();
+    const pct = state.prediction > 0 ? Math.min(100, (t.mine / state.prediction) * 100) : 0;
     const barClass = t.left < 0 ? 'over' : pct >= 80 ? 'warn' : '';
 
-    const items = trip.items.map((it) => {
+    const items = state.items.map((it) => {
       let math = '', amt = money(shareOf(it)), tag = '';
       if (it.kind === 'kindness') {
         math = 'a treat on you';
@@ -267,18 +204,22 @@
         </li>`;
     }).join('');
 
-    const shares = trip.items.filter((i) => i.kind !== 'kindness').map(shareOf);
-    const kinds = trip.items.map(kindnessOf).filter(Boolean);
+    const shares = state.items.filter((i) => i.kind !== 'kindness').map(shareOf);
+    const kinds = state.items.map(kindnessOf).filter(Boolean);
+
+    let hideTip = false;
+    try { hideTip = localStorage.getItem(TIP_KEY) === '1'; } catch { /* ignore */ }
+    const tip = !isStandalone() && !hideTip ? `
+      <div class="card install-tip">
+        <b>📲 Put me on your Home Screen!</b><br>
+        In Safari, tap <b>Share</b> <span aria-hidden="true">⬆️</span> then <b>Add to Home Screen</b>.
+        <div style="margin-top:10px"><button class="btn small white" data-act="hide-tip">Got it</button></div>
+      </div>` : '';
 
     app.innerHTML = `
-      <div class="topbar">
-        <button class="icon-btn" data-act="home" aria-label="All trips">‹</button>
-        <button class="icon-btn" data-act="edit-trip" aria-label="Edit trip">✏️</button>
-      </div>
-
       <header class="hero">
         <span class="kicker">COST TRACKER</span>
-        <h1 class="graffiti">${esc(trip.name)} <span class="emo">${esc(trip.emoji)}</span></h1>
+        <h1 class="graffiti">Miami <span class="emo">🌴</span></h1>
         <span class="sticker s1" aria-hidden="true">☀️</span>
         <span class="sticker s2" aria-hidden="true">🦩</span>
         ${DRIPS}
@@ -287,17 +228,19 @@
       <div class="stats">
         <div class="stat"><div class="stat-label">💸 My total</div><div class="stat-value">${money(t.mine)}</div></div>
         <div class="stat"><div class="stat-label">💝 Kindness</div><div class="stat-value">${money(t.kindness)}</div></div>
-        <div class="stat"><div class="stat-label">🔮 Prediction</div><div class="stat-value">${trip.prediction ? money(trip.prediction) : '—'}</div></div>
+        <button class="stat" data-act="edit-prediction" aria-label="Edit prediction">
+          <div class="stat-label">🔮 Prediction <span class="stat-edit">✏️</span></div>
+          <div class="stat-value">${state.prediction ? money(state.prediction) : 'Set it'}</div>
+        </button>
         <div class="stat"><div class="stat-label">${t.left < 0 ? '🚨 Over by' : '🌈 Left'}</div>
-          <div class="stat-value ${t.left < 0 ? 'over' : ''}">${trip.prediction ? money(Math.abs(t.left)) : '—'}</div></div>
+          <div class="stat-value ${t.left < 0 ? 'over' : ''}">${state.prediction ? money(Math.abs(t.left)) : '—'}</div></div>
       </div>
 
-      ${trip.prediction ? `
+      ${state.prediction ? `
         <div class="card budget">
-          <div class="budget-row"><span>${Math.round((t.mine / trip.prediction) * 100)}% of prediction</span><span>Out of pocket ${money(t.pocket)}</span></div>
+          <div class="budget-row"><span>${Math.round((t.mine / state.prediction) * 100)}% of prediction</span><span>Out of pocket ${money(t.pocket)}</span></div>
           <div class="bar"><div class="bar-fill ${barClass}" style="width:${pct}%"></div></div>
-        </div>` : `
-        <p class="hint">Tap ✏️ to set a <b>prediction</b> (your budget guess) and watch the bar fill up.</p>`}
+        </div>` : ''}
 
       <div class="section-title">🧾 Spending</div>
       <div class="card">
@@ -316,6 +259,19 @@
       </div>
       <p class="hint"><b>My total</b> is only your part of each bill. <b>Kindness</b> is what you covered for your crew: everyone else’s share when you paid a split bill, plus any treats.</p>
 
+      ${tip}
+
+      <div class="section-title">💾 Backup</div>
+      <div class="card receipt">
+        <p class="math" style="margin-bottom:12px">Your costs live on this phone. Save a backup file now and then so you never lose them.</p>
+        <div class="receipt-actions">
+          <button class="btn small white" data-act="export">⬇️ Save backup</button>
+          <button class="btn small white" data-act="import">⬆️ Restore</button>
+        </div>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+
+      <p class="footer-note">made with 💖 &amp; spray paint in the 305</p>
       <button class="fab" data-act="new-item" aria-label="Add cost">+</button>
     `;
   }
@@ -360,7 +316,7 @@
     pick.querySelectorAll('[data-emoji]').forEach((x) => x.setAttribute('aria-pressed', x === b));
   }
 
-  function itemSheet(trip, item) {
+  function itemSheet(item) {
     const isNew = !item;
     const draft = item ? { ...item } : { id: uid(), name: '', amount: 0, split: 1, emoji: '💸', kind: 'expense', iPaid: true };
     let emojiTouched = !isNew;
@@ -447,8 +403,8 @@
         if (!draft.name) { nameEl.focus(); return; }
         if (!draft.amount) { amountEl.focus(); toast('Add an amount 💸'); return; }
         if (draft.kind === 'kindness') draft.split = 1;
-        if (isNew) trip.items.push(draft);
-        else trip.items[trip.items.findIndex((i) => i.id === draft.id)] = draft;
+        if (isNew) state.items.push(draft);
+        else state.items[state.items.findIndex((i) => i.id === draft.id)] = draft;
         save(); closeSheet(); render();
         toast(isNew ? 'Added! 🌴' : 'Saved ✨');
       });
@@ -457,7 +413,7 @@
       const del = root.querySelector('[data-act="delete"]');
       del && del.addEventListener('click', () => {
         if (!confirm(`Delete “${draft.name}”?`)) return;
-        trip.items = trip.items.filter((i) => i.id !== draft.id);
+        state.items = state.items.filter((i) => i.id !== draft.id);
         save(); closeSheet(); render();
         toast('Deleted');
       });
@@ -467,54 +423,30 @@
     });
   }
 
-  function tripSheet(trip) {
-    const isNew = !trip;
-    const draft = trip ? { ...trip } : { id: uid(), name: '', emoji: '🌴', prediction: 0, items: [] };
-
+  function predictionSheet() {
     openSheet(`
-      <h2>${isNew ? 'New trip ✈️' : 'Edit trip'}</h2>
-      <form id="trip-form" autocomplete="off">
-        <label class="field"><span>Where are you going?</span>
-          <input class="input" name="name" placeholder="Miami" value="${esc(draft.name)}" maxlength="40" required>
-        </label>
-        <div class="emoji-pick">${emojiButtons(TRIP_EMOJIS, draft.emoji)}</div>
-        <label class="field"><span>Prediction (your budget guess)</span>
-          <input class="input money" name="prediction" inputmode="decimal" placeholder="372" value="${draft.prediction ? fmt(draft.prediction) : ''}">
+      <h2>Prediction 🔮</h2>
+      <form id="prediction-form" autocomplete="off">
+        <label class="field"><span>How much do you think Miami will cost you?</span>
+          <input class="input money" name="prediction" inputmode="decimal" placeholder="372" value="${state.prediction ? fmt(state.prediction) : ''}">
         </label>
         <div class="sheet-actions">
-          <button class="btn pink block" type="submit">${isNew ? 'Let’s go 🌴' : 'Save'}</button>
-          ${isNew ? '' : '<button class="btn danger block" type="button" data-act="delete">Delete trip</button>'}
+          <button class="btn pink block" type="submit">Save</button>
           <button class="btn white block" type="button" data-act="cancel">Cancel</button>
         </div>
       </form>
     `, (root) => {
-      const form = root.querySelector('#trip-form');
-      wireEmojiPicker(root, (e) => { draft.emoji = e; });
-
+      const form = root.querySelector('#prediction-form');
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        draft.name = form.elements.name.value.trim();
-        if (!draft.name) { form.elements.name.focus(); return; }
         const raw = form.elements.prediction.value.trim();
         const p = raw ? evalAmount(raw) : 0;
         if (!Number.isFinite(p) || p < 0) { toast('That prediction looks off 🤔'); return; }
-        draft.prediction = Math.round(p * 100);
-        if (isNew) state.trips.unshift(draft);
-        else Object.assign(trip, draft);
-        save(); closeSheet();
-        if (isNew) go(`#/trip/${draft.id}`); else render();
+        state.prediction = Math.round(p * 100);
+        save(); closeSheet(); render();
       });
-
       root.querySelector('[data-act="cancel"]').addEventListener('click', closeSheet);
-      const del = root.querySelector('[data-act="delete"]');
-      del && del.addEventListener('click', () => {
-        if (!confirm(`Delete the whole ${trip.name} trip? This can’t be undone.`)) return;
-        state.trips = state.trips.filter((t) => t.id !== trip.id);
-        save(); closeSheet(); go('#/');
-        toast('Trip deleted');
-      });
-
-      if (isNew) setTimeout(() => form.elements.name.focus(), 250);
+      setTimeout(() => form.elements.prediction.focus(), 250);
     });
   }
 
@@ -522,11 +454,11 @@
 
   async function exportBackup() {
     const json = JSON.stringify(state, null, 2);
-    const name = `trip-costs-${new Date().toISOString().slice(0, 10)}.json`;
+    const name = `miami-costs-${new Date().toISOString().slice(0, 10)}.json`;
     const file = new File([json], name, { type: 'application/json' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Trip costs backup' });
+        await navigator.share({ files: [file], title: 'Miami costs backup' });
         return;
       }
     } catch (e) { if (e && e.name === 'AbortError') return; }
@@ -542,11 +474,11 @@
     reader.onload = () => {
       try {
         const s = JSON.parse(reader.result);
-        if (!s || !Array.isArray(s.trips)) throw new Error('bad file');
-        if (!confirm('Replace the trips on this phone with the backup?')) return;
+        if (!isValid(s)) throw new Error('bad file');
+        if (!confirm('Replace the costs on this phone with the backup?')) return;
         state = s; save(); render();
         toast('Restored ✨');
-      } catch { toast('That file isn’t a trip backup 🤔'); }
+      } catch { toast('That file isn’t a Miami backup 🤔'); }
     };
     reader.readAsText(file);
   }
@@ -554,19 +486,14 @@
   /* ───────── Events ───────── */
 
   app.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-act],[data-open],[data-edit]');
+    const el = e.target.closest('[data-act],[data-edit]');
     if (!el) return;
-    const trip = findTrip(app.dataset.trip);
-
-    if (el.dataset.open) return go(`#/trip/${el.dataset.open}`);
-    if (el.dataset.edit && trip) return itemSheet(trip, trip.items.find((i) => i.id === el.dataset.edit));
+    if (el.dataset.edit) return itemSheet(state.items.find((i) => i.id === el.dataset.edit));
 
     switch (el.dataset.act) {
-      case 'home': return go('#/');
-      case 'new-trip': return tripSheet();
-      case 'edit-trip': return trip && tripSheet(trip);
-      case 'new-item': return trip && itemSheet(trip);
-      case 'share': return trip && shareTrip(trip);
+      case 'new-item': return itemSheet();
+      case 'edit-prediction': return predictionSheet();
+      case 'share': return shareText();
       case 'export': return exportBackup();
       case 'import': return document.getElementById('import-file').click();
       case 'hide-tip':
@@ -579,10 +506,6 @@
     if (e.target.id === 'import-file' && e.target.files[0]) importBackup(e.target.files[0]);
   });
 
-  window.addEventListener('hashchange', render);
-
-  // Open straight into the trip when there's only one.
-  if (!location.hash && state.trips.length === 1) history.replaceState(null, '', `#/trip/${state.trips[0].id}`);
   render();
 
   if ('serviceWorker' in navigator) {

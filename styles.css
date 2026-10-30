@@ -64,14 +64,9 @@ button { cursor: pointer; }
 }
 
 /* ───────── Header / graffiti title ───────── */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  min-height: 44px;
-}
-
 .hero {
   position: relative;
-  margin: 8px 0 22px;
+  margin: 8px 0 32px;
   padding: 22px 18px 30px;
   border: var(--border);
   border-radius: var(--radius);
@@ -92,10 +87,10 @@ button { cursor: pointer; }
   border-radius: 0 0 999px 999px;
   pointer-events: none;
 }
-.drip.d1 { left: 14%; height: 30px; background: #ff5a99; }
-.drip.d2 { left: 21%; width: 10px; height: 18px; background: #ff5f96; }
-.drip.d3 { left: 47%; height: 38px; background: #ff7066; }
-.drip.d4 { left: 76%; width: 11px; height: 24px; background: #ff8150; }
+.drip.d1 { left: 14%; height: 22px; background: #ff5a99; }
+.drip.d2 { left: 21%; width: 10px; height: 13px; background: #ff5f96; }
+.drip.d3 { left: 47%; height: 27px; background: #ff7066; }
+.drip.d4 { left: 76%; width: 11px; height: 17px; background: #ff8150; }
 
 .kicker {
   display: inline-block;
@@ -214,6 +209,9 @@ button { cursor: pointer; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .stat-value.over { color: #d61f5b; }
+button.stat { width: 100%; text-align: left; font: inherit; color: inherit; }
+button.stat:active { transform: translate(3px, 3px); box-shadow: none; }
+.stat-edit { margin-left: auto; font-size: 14px; }
 
 /* budget bar */
 .budget { margin-top: 16px; padding: 14px 16px; }
@@ -292,26 +290,6 @@ button { cursor: pointer; }
 
 .hint { margin: 10px 4px 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
 
-/* trips list */
-.trips { display: grid; gap: 16px; }
-.trip-card {
-  display: flex; align-items: center; gap: 14px;
-  width: 100%; padding: 16px;
-  text-align: left;
-}
-.trip-card:nth-child(odd) { transform: rotate(-.7deg); }
-.trip-card:nth-child(even) { transform: rotate(.7deg); }
-.trip-card:active { transform: translate(3px, 3px); box-shadow: var(--pop-sm); }
-.trip-emoji {
-  flex: none; width: 60px; height: 60px; display: grid; place-items: center;
-  font-size: 32px;
-  background: var(--yellow);
-  border: var(--border); border-radius: 18px;
-}
-.trip-card:nth-child(3n+2) .trip-emoji { background: var(--teal); }
-.trip-card:nth-child(3n+3) .trip-emoji { background: var(--pink); }
-.trip-name { font-family: var(--font-display); font-size: 18px; }
-.trip-sub { font-size: 14px; color: var(--muted); margin-top: 2px; }
 
 /* ───────── Bottom sheet ───────── */
 .sheet-backdrop {

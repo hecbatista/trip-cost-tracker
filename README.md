@@ -1,19 +1,19 @@
-# Trip Cost Tracker 🌴
+# Cost Tracker Miami 🌴
 
-A cutesy, Wynwood-mural-style web app for tracking what a trip really costs.
+A cutesy, Wynwood-mural-style web app for tracking what the Miami trip really costs.
 You install it on your iPhone from Safari; there's no App Store involved.
 
 ## What it does
 
-- **Trips** with a name, emoji, and a **prediction** (your budget guess).
+- One screen for Miami, with a **prediction** (your budget guess). Tap it to change it.
 - **Costs** with a bill total and how many people split it. Your share is `total ÷ people`
   (for example `30.95 / 2 = 15.48`). The amount box also does math, like `12.50+4`.
 - **Kindness** is what you covered for your crew: everyone else's share when you paid a
   split bill, plus any "treat for someone" costs.
 - **The math** shows the same `Total: … = 124.95` / `Kindness: … = 47.11` lines as a
   notes-app list, and **Share as text** sends them anywhere.
-- Works offline. Data is saved on the device; use **Save backup** / **Restore** on the trips
-  screen to keep a copy.
+- Works offline. Data is saved on the device; use **Save backup** / **Restore** at the bottom
+  to keep a copy.
 
 ## Put it on your iPhone
 

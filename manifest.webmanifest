@@ -1,7 +1,7 @@
 {
-  "name": "Trip Cost Tracker",
-  "short_name": "Trip Costs",
-  "description": "A cutesy, Wynwood-style tracker for what your trip really costs.",
+  "name": "Cost Tracker Miami",
+  "short_name": "Miami Costs",
+  "description": "A cutesy, Wynwood-style tracker for what Miami really costs.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
